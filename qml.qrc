@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>FlatButton.qml</file>
+        <file>ic_pause.png</file>
+        <file>ic_play.png</file>
+        <file>ic_stop.png</file>
+        <file>打开文件夹.png</file>
+    </qresource>
+</RCC>
