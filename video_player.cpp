@@ -50,6 +50,7 @@ audio_dec =nullptr;
 video_dec =nullptr;
 player_state_ = PlayerState::PlayerState_Ready;
 decodec_->set_player_state(player_state_);
+audio_info_ = demux_->get_audio_info();
 log_info("Init end");
  }
 
@@ -62,6 +63,7 @@ VideoPlayer::~VideoPlayer()
 void VideoPlayer::Play()
 {
     log_debug("Play start");
+
     player_state_ = PlayerState::PlayerState_Play;
     demux_->set_player_state(player_state_);
     decodec_->set_player_state(player_state_);
@@ -88,6 +90,23 @@ void VideoPlayer::Stop()
     demux_->PushNullPacket(demux_->get_video_stream_index(),video_pkt_queue_);
     decodec_->PushNullFrame();
     decodec_->set_player_state(player_state_);
+//    if (m_callback.isCallable()) {
+//        // 准备参数
+//        QJSValueList args;
+//        args << QJSValue(10); // 添加参数
+
+//        // 调用 QML 函数并传递参数
+//        QJSValue result = m_callback.call(args);
+
+//        // 处理返回值
+//        if (result.isError()) {
+//            log_error("Callback execution failed:%s " , result.toString());
+//        } else {
+//            log_info("Callback result:%s " , result.toString());
+//        }
+//    } else {
+//        log_error("Callback is not callable!");
+//    }
     log_info("Stop end!!!");
 }
 void VideoPlayer::Pause()
@@ -102,30 +121,6 @@ void VideoPlayer::Pause()
    decodec_->set_player_state(player_state_);
     log_debug("Pause");
 }
-//void VideoPlayer::SetPause(bool pause)
-//{
-//}
-//bool VideoPlayer::GetPause()
-//{
-//}
-//void VideoPlayer::SetPlay(bool play)
-//{
-//}
-//bool VideoPlayer::GetPlay()
-//{
-//}
-//void VideoPlayer::SetPosition(int position)
-//{
-//}
-//int VideoPlayer::GetPosition()
-//{
-//}
-//void VideoPlayer::SetVolume(int volume)
-//{
-//}
-//int VideoPlayer::GetVolume()
-//{
-//}
 
    void VideoPlayer::set_volume(int volume) {
 decodec_->set_volume(volume);
@@ -160,5 +155,42 @@ void VideoPlayer::setVideoFrameProvider(VideoFrameProvider *provider) {
     } else {
         log_error("provider == nullptr");
     }
+}
 
+    void VideoPlayer::setPlaybackproces(const QVariant &callback) {
+        if (callback.canConvert<QJSValue>()) {
+            m_callback = callback.value<QJSValue>();
+        } else {
+            log_error("Callback is not a valid function!") ;
+        }
+    }
+
+
+   int VideoPlayer::get_video_duration() {
+    return demux_->get_video_duration();
+   }
+    // 获取当前播放时间（秒）
+double VideoPlayer::getPlayTime() {
+    // 获取已播放的总字节数
+    int playedBytes = decodec_->get_play_sample_size();
+    //log_info("playedBytes = %d",playedBytes);
+    
+    // 计算播放时间 = 总字节数 / (采样率 * 声道数 * 每个采样的字节数)
+    // int playTimeInSeconds = playedBytes / 
+    //     (audio_info_.freq * audio_info_.channels * audio_info_.format);
+         double playTimeInSeconds = playedBytes / 
+         (48000.0 * 2.0 * 2.0);  // 目前写死 这个是rasample之后送给sdl的数
+ //log_info("playTimeInSeconds = %d",playTimeInSeconds);
+    return playTimeInSeconds;
+}
+
+double VideoPlayer::get_current_pts () {
+    double current_pts = decodec_->get_current_pts()/1000; //s
+    log_info("current_pts = %lf",current_pts);
+    return current_pts ;
+}
+
+void VideoPlayer::StreamSeek(double pos) {
+    log_info("pos  = %f",pos);
+    demux_->StreamSeek(static_cast<int64_t>(pos));
 }

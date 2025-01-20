@@ -47,4 +47,7 @@ LIBS += $$PWD/ffmpeg-4.2.1-win32-dev/lib/avformat.lib   \
 
 HEADERS +=  *.h
 
+DISTFILES += \
+    huli.gif
+
 

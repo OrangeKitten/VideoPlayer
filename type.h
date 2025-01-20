@@ -8,6 +8,7 @@ extern "C"{
 }
 #include <functional>
 using WriteYUVDataCallback = std::function<void(const AVFrame *video_frame)>;
+using std::placeholders::_1;
 enum Ret {
     Ret_OK = 0,
     Ret_ERROR = -1,

@@ -1,10 +1,12 @@
 #include "demux.h"
 #include "file_dump.h"
-extern "C" {
+extern "C"
+{
 #include "log.h"
 }
 
-Demux::Demux(const char *url) {
+Demux::Demux(const char *url)
+{
 
   format_ctx_ = nullptr;
   avio_ctx_ = nullptr;
@@ -18,21 +20,29 @@ Demux::Demux(const char *url) {
   frame_rate_ = {0, 0};
   dump_file_ = std::make_unique<FileDump>("demux_audio.aac");
 
-  if (OpenFile() < 0) {
+  if (OpenFile() < 0)
+  {
     log_error("OpenFile Failed");
   }
 }
 
-int Demux::OpenFile() {
+int Demux::OpenFile()
+{
   // AVFormatContext是描述一个媒体文件或媒体流的构成和基本信息的结构体
   // 打开文件，主要是探测协议类型，如果是网络文件则创建网络链接
-  int ret = avformat_open_input(&format_ctx_, url_, NULL, NULL);
+  // 以可读写模式打开文件
+  AVDictionary* options = NULL;
+  av_dict_set(&options, "rw_timeout", "5000000", 0); // 设置超时时间
+  int ret = avformat_open_input(&format_ctx_, url_, NULL, &options);
   if (ret < 0) // 如果打开媒体文件失败，打印失败原因
   {
     char buf[1024] = {0};
     av_strerror(ret, buf, sizeof(buf) - 1);
     log_error("open %s failed:%s\n", url_, buf);
+    av_dict_free(&options);
+    return ret;
   }
+  av_dict_free(&options);
 
   ret = avformat_find_stream_info(format_ctx_, NULL);
   if (ret < 0) // 如果打开媒体文件失败，打印失败原因
@@ -75,36 +85,44 @@ int Demux::OpenFile() {
       av_find_best_stream(format_ctx_, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
   audio_stream_ = format_ctx_->streams[audio_stream_index_];
   video_stream_ = format_ctx_->streams[video_stream_index_];
-  AUDIO_INFO audio_info;
-  audio_info.channels = audio_stream_->codecpar->channels;
-  audio_info.format = audio_stream_->codecpar->format;
-  audio_info.freq = audio_stream_->codecpar->sample_rate;
-  audio_info.samples = audio_stream_->codecpar->frame_size;
-  setAudioInfo(audio_info);
+
+  audio_info_.channels = audio_stream_->codecpar->channels;
+  audio_info_.format = audio_stream_->codecpar->format;
+  audio_info_.freq = audio_stream_->codecpar->sample_rate;
+  audio_info_.samples = audio_stream_->codecpar->frame_size;
+  setAudioInfo(audio_info_);
   DumpMedioInfo();
 }
 
-Demux::~Demux() {
+AUDIO_INFO Demux::get_audio_info()
+{
+  return audio_info_;
+}
+
+Demux::~Demux()
+{
   log_info("~Demux in");
 
-  if (read_packet_thread_->joinable()) {
+  if (read_packet_thread_->joinable())
+  {
     read_packet_thread_->join();
   }
   if (format_ctx_)
     avformat_close_input(&format_ctx_);
   log_info("~Demux out");
-
 }
 
 AVRational Demux::getVideoTimeBase() { return video_stream_->time_base; }
 
 AVRational Demux::getAudioTimeBase() { return audio_stream_->time_base; }
 
-AVRational Demux::getVideoFrameRate() {
+AVRational Demux::getVideoFrameRate()
+{
   return frame_rate_ = av_guess_frame_rate(format_ctx_, video_stream_, NULL);
 }
 
-void Demux::DumpMedioInfo() {
+void Demux::DumpMedioInfo()
+{
 
   log_debug("----- Audio info:\n");
   // index: 每个流成分在ffmpeg解复用分析后都有唯一的index作为标识
@@ -112,29 +130,41 @@ void Demux::DumpMedioInfo() {
   // sample_rate: 音频编解码器的采样率，单位为Hz
   log_debug("samplerate:%dHz\n", audio_stream_->codecpar->sample_rate);
   // codecpar->format: 音频采样格式
-  if (AV_SAMPLE_FMT_FLTP == audio_stream_->codecpar->format) {
+  if (AV_SAMPLE_FMT_FLTP == audio_stream_->codecpar->format)
+  {
     log_debug("sampleformat:AV_SAMPLE_FMT_FLTP\n");
-  } else if (AV_SAMPLE_FMT_S16P == audio_stream_->codecpar->format) {
+  }
+  else if (AV_SAMPLE_FMT_S16P == audio_stream_->codecpar->format)
+  {
     log_debug("sampleformat:AV_SAMPLE_FMT_S16P\n");
   }
   // channels: 音频信道数目
   log_debug("channel number:%d\n", audio_stream_->codecpar->channels);
   // codec_id: 音频压缩编码格式
-  if (AV_CODEC_ID_AAC == audio_stream_->codecpar->codec_id) {
+  if (AV_CODEC_ID_AAC == audio_stream_->codecpar->codec_id)
+  {
     log_debug("audio codec:AAC\n");
-  } else if (AV_CODEC_ID_MP3 == audio_stream_->codecpar->codec_id) {
+  }
+  else if (AV_CODEC_ID_MP3 == audio_stream_->codecpar->codec_id)
+  {
     log_debug("audio codec:MP3\n");
-  } else {
+  }
+  else
+  {
     log_debug("audio codec_id:%d\n", audio_stream_->codecpar->codec_id);
   }
   // 音频总时长，单位为秒。注意如果把单位放大为毫秒或者微妙，音频总时长跟视频总时长不一定相等的
-  if (audio_stream_->duration != AV_NOPTS_VALUE) {
+  if (audio_stream_->duration != AV_NOPTS_VALUE)
+  {
     int duration_audio =
         (audio_stream_->duration) * av_q2d(audio_stream_->time_base);
+    log_info("time_base.den = %d time_base.num = %d",audio_stream_->time_base.den,audio_stream_->time_base.num);
     // 将音频总时长转换为时分秒的格式打印到控制台上
     log_debug("audio duration: %02d:%02d:%02d\n", duration_audio / 3600,
               (duration_audio % 3600) / 60, (duration_audio % 60));
-  } else {
+  }
+  else
+  {
     log_debug("audio duration unknown");
   }
 
@@ -149,15 +179,21 @@ void Demux::DumpMedioInfo() {
   log_debug("video width:%d\n", video_stream_->codecpar->width);
   log_debug("video height:%d\n", video_stream_->codecpar->height);
   // code_id 编解码格式
-  if (AV_CODEC_ID_H264 == video_stream_->codecpar->codec_id) {
+  if (AV_CODEC_ID_H264 == video_stream_->codecpar->codec_id)
+  {
     log_debug("video codec:H264\n");
-  } else if (AV_CODEC_ID_MPEG4 == video_stream_->codecpar->codec_id) {
+  }
+  else if (AV_CODEC_ID_MPEG4 == video_stream_->codecpar->codec_id)
+  {
     log_debug("video codec:MPEG4\n");
-  } else {
+  }
+  else
+  {
     log_debug("video codec_id:%d\n", video_stream_->codecpar->codec_id);
   }
   // 视频总时长，单位为秒，注意跟音频总时长一样，如果单位是微妙或者毫秒，则这个数值不一定等于视频总时长
-  if (video_stream_->duration != AV_NOPTS_VALUE) {
+  if (video_stream_->duration != AV_NOPTS_VALUE)
+  {
     int duration_video =
         (video_stream_->duration) * av_q2d(video_stream_->time_base);
     // 转换成时分秒格式打印视频时长到控制台
@@ -166,41 +202,96 @@ void Demux::DumpMedioInfo() {
   }
 }
 
-void Demux::setAudioQueue(std::shared_ptr<PacketQueue> pkt_queue) {
+void Demux::setAudioQueue(std::shared_ptr<PacketQueue> pkt_queue)
+{
   audio_pkt_queue_ = pkt_queue;
 }
-void Demux::setVideoQueue(std::shared_ptr<PacketQueue> pkt_queue) {
+void Demux::setVideoQueue(std::shared_ptr<PacketQueue> pkt_queue)
+{
   video_pkt_queue_ = pkt_queue;
 }
 
-void Demux::StartReadPacket() {
+void Demux::StartReadPacket()
+{
   read_packet_thread_ =
       std::make_unique<std::thread>(&Demux::ReadPacketThread, this);
 }
 
 void Demux::PushNullPacket(int stream_index,
-                           std::shared_ptr<PacketQueue> queue) {
+                           std::shared_ptr<PacketQueue> queue)
+{
   AVPacket *pkt = av_packet_alloc();
   pkt->data = nullptr;
   pkt->size = 0;
   pkt->stream_index = stream_index;
   queue->Push(pkt);
 }
-void Demux::ReadPacketThread() {
+void Demux::ReadPacketThread()
+{
 
   int pkt_count = 0;
   int print_max_count = 10;
   log_debug("\n-----av_read_frame start\n");
   int ret = -1;
-  while (1) {
-    if (player_state_ == PlayerState::PlayerState_Stop) {
+  while (1)
+  {
+    if (player_state_ == PlayerState::PlayerState_Stop)
+    {
       log_info(" PlayerState_Stop exit ReadPacketThread");
       return;
     }
+        if (seek_)
+    {
+      int64_t seek_target = seek_pos_*AV_TIME_BASE; // 目标位置
+      int64_t seek_min = seek_rel_ > 0 ? seek_target - seek_rel_ + 2 : INT64_MIN;
+      int64_t seek_max = seek_rel_ < 0 ? seek_target - seek_rel_ - 2 : INT64_MAX;
+      // 前进seek seek_rel>0
+      // seek_min    = seek_target - is->seek_rel + 2;
+      // seek_max    = INT64_MAX;
+      //  后退seek seek_rel<0
+      // seek_min = INT64_MIN;
+      // seek_max = seek_target + |seek_rel| -2;
+      // seek_rel =0  鼠标直接seek
+      // seek_min = INT64_MIN;
+      // seek_max = INT64_MAX;
+
+      log_info("seek_target = %ld",seek_target);
+      // 检查文件格式是否支持seek
+      if (!(format_ctx_->iformat->flags & AVFMT_SEEK_TO_PTS)) {
+        log_error("File format does not support seeking");
+        seek_ = false;
+        continue;
+      }
+
+      ret = avformat_seek_file(format_ctx_, -1, seek_min, seek_target, seek_max, AVSEEK_FLAG_FRAME);
+      if (ret < 0) {
+        char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        log_error("Seek failed: %s (error code: %d)", errbuf, ret);
+        
+        // 常见错误码分析
+        if (ret == AVERROR(ENOSYS)) {
+          log_error("Format does not support seeking");
+        } else if (ret == AVERROR(EINVAL)) {
+          log_error("Invalid parameters or unsupported seek flags");
+        } else if (ret == AVERROR(ERANGE)) {
+          log_error("Seek position is out of bounds");
+        } else if (ret == AVERROR(EPIPE)) {
+          log_error("End of file reached");
+        } else {
+          log_error("Unknown seek error");
+        }
+        seek_ = false;
+        continue;
+      }
+      log_info("Seek succeeded to position: %ld", seek_target);
+      seek_ = false;
+      }
     // 在取出数据的时候做释放
     AVPacket *pkt = av_packet_alloc();
     ret = av_read_frame(format_ctx_, pkt);
-    if (ret < 0) {
+    if (ret < 0)
+    {
       // if (audio_stream_index_ >= 0)
       //   PushNullPacket(audio_stream_index_, audio_pkt_queue_);
       // if (video_stream_index_ >= 0)
@@ -210,39 +301,45 @@ void Demux::ReadPacketThread() {
     }
     read_size_ += pkt->size;
 
-    if (pkt->stream_index == audio_stream_index_) {
+    if (pkt->stream_index == audio_stream_index_)
+    {
       // log_debug("Push audio pkt size = %d",pkt->size);
       // dump_file_->WriteBitStream(pkt,audio_stream_->codecpar);
-        //log_info("audio_queue size - %d",audio_pkt_queue_->Size());
+      // log_info("audio_queue size - %d",audio_pkt_queue_->Size());
       audio_pkt_queue_->Push(pkt);
-
-    } else if (pkt->stream_index == video_stream_index_) {
+    }
+    else if (pkt->stream_index == video_stream_index_)
+    {
       // log_debug("Push video pkt size = %d",pkt->size);
-        // log_info("video_queue size - %d",video_pkt_queue_->Size());
+      // log_info("video_queue size - %d",video_pkt_queue_->Size());
       video_pkt_queue_->Push(pkt);
-
     }
     write_size_ += pkt->size;
   }
 }
 
-Ret Demux::getAudioAvCodecInfo(AVCodecParameters *dec) {
-  if (audio_stream_ == nullptr && dec == nullptr) {
+Ret Demux::getAudioAvCodecInfo(AVCodecParameters *dec)
+{
+  if (audio_stream_ == nullptr && dec == nullptr)
+  {
     return Ret_ERROR;
   }
   memcpy(dec, audio_stream_->codecpar, sizeof(AVCodecParameters));
   return Ret_OK;
 }
 
-Ret Demux::getVideoAvCodecInfo(AVCodecParameters *dec) {
-  if (video_stream_ == nullptr && dec == nullptr) {
+Ret Demux::getVideoAvCodecInfo(AVCodecParameters *dec)
+{
+  if (video_stream_ == nullptr && dec == nullptr)
+  {
     return Ret_ERROR;
   }
   memcpy(dec, video_stream_->codecpar, sizeof(AVCodecParameters));
   return Ret_OK;
 }
 
-void Demux::set_player_state(PlayerState player_state) {
+void Demux::set_player_state(PlayerState player_state)
+{
   log_debug("player state = %d\n", player_state);
   player_state_ = player_state;
 }
@@ -250,3 +347,12 @@ void Demux::set_player_state(PlayerState player_state) {
 int Demux::get_audio_stream_index() { return audio_stream_index_; }
 
 int Demux::get_video_stream_index() { return video_stream_index_; }
+int Demux::get_video_duration()
+{
+  return (audio_stream_->duration) * av_q2d(audio_stream_->time_base);
+}
+void Demux::StreamSeek(int64_t pos) {
+  log_info("pos = %ld", pos);
+  seek_ = true;
+  seek_pos_ = pos;
+}

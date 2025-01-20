@@ -6,5 +6,8 @@
         <file>ic_play.png</file>
         <file>ic_stop.png</file>
         <file>打开文件夹.png</file>
+        <file>test.png</file>
+        <file>ProcessBar.qml</file>
+        <file>huli.gif</file>
     </qresource>
 </RCC>

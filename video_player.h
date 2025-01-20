@@ -9,7 +9,9 @@
 #include <mutex>
 #include <QObject>
 #include "video_frame_provider.h"
- using std::placeholders::_1;
+#include <QJSValue>
+
+
 class VideoPlayer :public QObject{
     Q_OBJECT
 public:
@@ -20,9 +22,14 @@ public:
     Q_INVOKABLE void Pause();
     Q_INVOKABLE void Stop();
     Q_INVOKABLE void set_url(const QString &url);
+    Q_INVOKABLE int get_video_duration();
+    Q_INVOKABLE double getPlayTime();
+    Q_INVOKABLE void StreamSeek(double pos);
+    Q_INVOKABLE double get_current_pts () ;
 
-     void set_video_frame_render_callback(const WriteYUVDataCallback &cb) ;
-     Q_INVOKABLE void setVideoFrameProvider(VideoFrameProvider *provider) ;
+    void set_video_frame_render_callback(const WriteYUVDataCallback &cb) ;
+    Q_INVOKABLE void setVideoFrameProvider(VideoFrameProvider *provider) ;
+    Q_INVOKABLE void setPlaybackproces(const QVariant &callback);
 
 //    void SetPause(bool pause);
 //    bool GetPause();
@@ -48,5 +55,9 @@ private:
     std ::string url_;
     std::mutex mtx_;
     VideoFrameProvider *videoFrameProvider_ = nullptr;
+    QJSValue m_callback; // 存储 QML 函数
+    AUDIO_INFO audio_info_;
+
+
 };
 #endif

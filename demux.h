@@ -29,16 +29,19 @@ public:
     void PushNullPacket(int stream_index,std::shared_ptr<PacketQueue>queue);
     int get_video_stream_index();
     int get_audio_stream_index();
+    int get_video_duration();
+    AUDIO_INFO get_audio_info();
+    void StreamSeek(int64_t pos);
    
 private:
     void DumpMedioInfo();
     int OpenFile();
     void ReadPacketThread();
-   
-    PlayerState player_state_;
+
 
 public:
 AVRational frame_rate_;
+AUDIO_INFO audio_info_;
 private:
     AVFormatContext *format_ctx_;
     AVIOContext *avio_ctx_;
@@ -54,6 +57,11 @@ private:
     int read_size_;
     int write_size_;
     std::unique_ptr<FileDump>  dump_file_;
+    PlayerState player_state_;
+    bool seek_ = false;
+    int64_t seek_pos_ = 0; //秒
+    int64_t seek_rel_ = 0;
+
     
     
 

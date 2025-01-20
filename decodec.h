@@ -88,6 +88,8 @@ public:
   void Start_Video_Rendor();
   void PushNullFrame();
   void set_video_frame_render_callback(const WriteYUVDataCallback &cb) ;
+  int get_play_sample_size();
+  int64_t get_current_pts(); //ms
 private:
   void AudioThread();
   void VideoThread();
@@ -158,6 +160,8 @@ private:
   AVRational audio_tb_;      // timebase
   AVRational video_tb_;      // timebase
 
+  
+
 
 AVRational video_frame_rate_;
 public:
@@ -177,5 +181,9 @@ public:
   SDL_AudioSpec spec_;
 
   int	bytes_per_sec;          // 一秒时间的字节数，比如采样率48Khz，2 channel，16bit，则一秒48000*2*16/8=192000
+  int play_sample_size_; //字节
+
+  int64_t StartTime_ = AV_NOPTS_VALUE; //第一帧audio数据的pts
+  int64_t CurrentPts_ = AV_NOPTS_VALUE;//当前播放S
 };
 #endif

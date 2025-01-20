@@ -17,20 +17,29 @@ Rectangle {
     border.width: hovered ? 2 : 0;
     signal clicked;
 
-    Image {
-        id: icon;
-        anchors.top: parent.top;
-        anchors.margins: 2;
-        anchors.horizontalCenter: parent.horizontalCenter;
+    property int padding: 10
+    property size iconSize: Qt.size(32, 32)
 
-    }
+    Column {
+        id: content
+        anchors.centerIn: parent
+        spacing: 5
+        // padding: parent.padding
 
-    Text {
-        id: btnText;
-        anchors.top: icon.bottom;
-        anchors.horizontalCenter: icon.horizontalCenter;
-        anchors.margins: 2;
-        color: ma.pressed ? "blue" : (parent.hovered ? "#0000a0" : "white");
+        Image {
+            id: icon
+            width: iconSize.width
+            height: iconSize.height
+            fillMode: Image.PreserveAspectFit
+            sourceSize: iconSize
+        }
+
+        Text {
+            id: btnText
+            color: ma.pressed ? "blue" : (parent.hovered ? "#0000a0" : "white")
+            font.pixelSize: 14
+            horizontalAlignment: Text.AlignHCenter
+        }
     }
     MouseArea {
         id: ma;
@@ -50,4 +59,3 @@ Rectangle {
         }
     }
 }
-

@@ -70,6 +70,7 @@ Decodec::Decodec()
   last_video_frame_.frame = nullptr;
   frame_drops_late = 0;
   player_state_ = PlayerState::PlayerState_Stop;
+  play_sample_size_ = 0;
 }
 
 Decodec::~Decodec()
@@ -130,7 +131,7 @@ void Decodec::set_player_state(PlayerState player_state)
     set_mute(true);
   } else if(player_state_ == PlayerState::PlayerState_Stop) {
     log_info("SDL_CloseAudioDevice in ");
-    SDL_CloseAudioDevice(audio_dev);
+    //SDL_CloseAudioDevice(audio_dev);
     log_info("SDL_CloseAudioDevice out");
   }
   video_clock_->paused_ = audio_clock_->paused_ =
@@ -823,9 +824,9 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt)
     //  2 *1.5); //for test
 
     // dump_file_->WritePcmData(temp.data(),temp.size());
-    log_info("audio_thread push in ");
+  //  log_info("audio_thread push in ");
     audio_frame_queue_->Push(audio_frame_resample_);
-     log_info("audio_thread push out ");
+     //log_info("audio_thread push out ");
   }
 }
 
@@ -836,6 +837,16 @@ int Decodec::get_audio_decode_frame()
       log_info("audio sdl receive null frame \n");
       return 0;
   }
+  if(aduio_codec_info_->sample_rate!=want_audio_spec_.freq) {
+    //说明需要resample，那么resample后的pts值不应该在用之前的audio_tb了
+    audio_tb_.den = want_audio_spec_.freq;
+    log_info("change audio_tb.den = %d",want_audio_spec_.freq);
+  }
+  //设置第一帧audio的pts
+  if(StartTime_ ==AV_NOPTS_VALUE) {
+    StartTime_ = temp_frame->frame->pts * av_q2d(audio_tb_) * 1000;
+  }
+  CurrentPts_ = temp_frame->frame->pts * av_q2d(audio_tb_) * 1000;
   // printf("temp_frame_pts = %lld temp_frame_nb_sample = %ld\n",
   // temp_frame->pts, temp_frame->nb_samples);
   int frame_size = av_samples_get_buffer_size(
@@ -848,6 +859,7 @@ int Decodec::get_audio_decode_frame()
     // pts不是根据sample_rate传输的
     // audio_tb_ = (AVRational){
     //     1000, temp_frame->frame->sample_rate}; /
+    log_info("temp_frame->frame->pts = %ld",temp_frame->frame->pts);
     temp_frame->pts = (double)temp_frame->frame->pts * av_q2d(audio_tb_) * 1000;
 
     log_debug("temp_frame->frame->pts = %lld temp_frame_pts = %0.3f "
@@ -1024,6 +1036,7 @@ Ret Decodec::InitVideo()
 
 static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
 {
+
   // 获取传入的解码器对象
   Decodec *temp_decodec = (Decodec *)opaque;
   if(temp_decodec->get_player_state() == PlayerState::PlayerState_Stop) {
@@ -1043,6 +1056,7 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
   int audio_buf_size =
       temp_decodec->audio_ringbuf_->occupied_space(); // 缓冲区中剩余数据的大小
 
+  int temp_len = len;
   // 处理每个回调需要的 `len` 数据
   while (len > 0)
   {
@@ -1096,6 +1110,10 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
   //  temp_time,
   //         temp_decodec->current_audio_clock_,
   //         temp_decodec->audio_ringbuf_->occupied_space());
+
+
+  temp_decodec->play_sample_size_ +=temp_len;
+  //log_info("temp_decodec->play_sample_size_ = %d",temp_decodec->play_sample_size_);
 
   temp_decodec->audio_clock_->set_clock_at(
       temp_decodec->current_audio_clock_ - temp_time, 0,
@@ -1208,3 +1226,12 @@ void Decodec::set_video_frame_render_callback(const WriteYUVDataCallback &cb)
   write_yuv_data_cb_ = std::move(cb);
 }
 
+int  Decodec::get_play_sample_size (){
+   std::lock_guard<std::mutex> lck(mtx_);
+  // log_info("play_sample_size_ = %d\n",play_sample_size_);
+  return play_sample_size_;
+}
+ int64_t  Decodec::get_current_pts() {
+  int64_t CurrentPlayPts_= CurrentPts_ - StartTime_;
+  return CurrentPlayPts_;
+ }
